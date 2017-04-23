@@ -39,3 +39,6 @@ _start-cmd.bat
 # Local config unix
 .localconfig
 cmake-build-debug
+
+# Ctags
+tags

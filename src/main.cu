@@ -117,6 +117,10 @@ static void argmax(const float *X, const shape &xdims, int *Y) {
   }
 }
 
+static void print_dims(const shape &dims) {
+  std::cout << dims.num << " x " << dims.depth << " x " << dims.height << " x " << dims.width << std::endl;
+}
+
 static void print_array(const float *data, const shape &dim) {
   std::cout << "Printing array\n";
   for (const auto i : range(0, dim.flattened_length())) {
@@ -233,6 +237,8 @@ void forward_operation(float *x, float *conv1, float *conv2, float *fc1, float *
   // conv1 layer
   const shape adims = {xdims.num, conv1dims.num, (xdims.height - conv1dims.height + 1),
                        (xdims.width - conv1dims.width + 1)};
+  std::cout << "adims: ";
+  print_dims(adims);
   auto a            = zeros<float>(adims);
   conv_forward_valid(x, xdims, conv1, conv1dims, a, adims);
 
@@ -244,12 +250,16 @@ void forward_operation(float *x, float *conv1, float *conv2, float *fc1, float *
   // sub-sampling: average pooling
   const int pool_size = 2;
   const shape bdims   = {adims.num, adims.depth, adims.height / pool_size, adims.width / pool_size};
+  std::cout << "bdims: ";
+  print_dims(bdims);
   auto b              = zeros<float>(bdims);
   average_pool(a, adims, pool_size, b, bdims);
 
   // conv2 layer
   const shape cdims = {bdims.num, conv2dims.num, (bdims.height - conv2dims.height + 1),
                        (bdims.width - conv2dims.width + 1)};
+  std::cout << "cdims: ";
+  print_dims(cdims);
   auto c            = zeros<float>(cdims);
   conv_forward_valid(b, bdims, conv2, conv2dims, c, cdims);
 
@@ -258,14 +268,20 @@ void forward_operation(float *x, float *conv1, float *conv2, float *fc1, float *
 
   // sub-sampling: average pooling
   const shape ddims = {cdims.num, cdims.depth, cdims.height / pool_size, cdims.width / pool_size};
+  std::cout << "ddims: ";
+  print_dims(ddims);
   auto d            = zeros<float>(ddims);
   average_pool(c, cdims, pool_size, d, ddims);
 
   // reshape
   const shape ddims2 = {ddims.num, ddims.depth * ddims.height * ddims.width};
+  std::cout << "ddims2: ";
+  print_dims(ddims2);
 
   // fully connected layer 1: matrix multiplication
   const shape edims = {ddims.num, fc1dims.depth};
+  std::cout << "edims: ";
+  print_dims(edims);
   auto e            = zeros<float>(edims);
   fully_forward(d, ddims2, fc1, fc1dims, e, edims);
 
@@ -274,9 +290,13 @@ void forward_operation(float *x, float *conv1, float *conv2, float *fc1, float *
 
   // fully connected layer 2: matrix multiplication
   const shape fdims = {edims.num, fc2dims.depth};
+  std::cout << "fdims: ";
+  print_dims(fdims);
+
   auto f            = zeros<float>(fdims);
   fully_forward(e, edims, fc2, fc2dims, f, fdims);
 
+  print_array(f, fdims);
   argmax(f, fdims, out);
 
   delete[] a;
@@ -383,6 +403,9 @@ int main(int argc, char **argv) {
 
   // Verify correctness
   // ----------------------------------------
+  for (int i = 0; i < FLAGS_batch_size; i++) {
+    std::cout << "out[" << i << "]: " << out[i] << std::endl;
+  }
 
   // Free memory
   // ----------------------------------------

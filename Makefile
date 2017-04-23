@@ -11,11 +11,12 @@ CFLAGS = ${DEFINES} -I ${current_dir}/src
 
 LIBS=-std=c++11
 
-CUDA_ARCH=-arch=sm_35 -ccbin g++-4.9
+CUDA_ARCH=-arch=sm_35 -ccbin g++ #g++-4.9
 CUDA_LDFLAGS=-L${CUDA_HOME}/lib64 -lcudart 
 
 SOURCES=src/main.cu
-TARGET=/build/ece508-convlayer
+#TARGET=/build/ece508-convlayer
+TARGET=ece508-convlayer
 DATA=data/0
 
 ARGS = 
