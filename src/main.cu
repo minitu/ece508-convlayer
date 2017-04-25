@@ -17,7 +17,7 @@
 #define NUM_DIGITS 10
 #define TILE_WIDTH 4
 
-static size_t FLAGS_batch_size = 10;
+static size_t FLAGS_batch_size = 1000;
 static std::string FLAGS_testdata{};
 static std::string FLAGS_model{};
 
@@ -27,8 +27,8 @@ shape rdims = {FLAGS_batch_size, NUM_DIGITS};
 
 shape conv1dims = {32, 1, 5, 5};
 shape conv2dims = {64, 32, 5, 5};
-shape fc1dims   = {128, 1024};
-shape fc2dims   = {10, 128};
+shape fc1dims   = {1024, 128};
+shape fc2dims   = {128, 10};
 
 /******************************************************************************
  GPU Kernels
@@ -74,7 +74,7 @@ static void relu4(float *X, const shape &xdims) {
 
 // Rectified linear unit 2d
 static void relu2(float *X, const shape &xdims) {
-  for (const auto i : range(0, xdims.num * xdims.depth)) {
+  for (const auto i : range(0, xdims.height * xdims.width)) {
     X[i] = (X[i] < 0) ? 0 : X[i];
   }
 }
@@ -86,13 +86,11 @@ static void average_pool(const float *X, const shape &xdims, const int pool_size
     for (const auto m : range(0, ydims.depth)) {
       for (const auto h : range(0, ydims.height)) {
         for (const auto w : range(0, ydims.width)) {
-          for (const auto c : range(0, xdims.depth)) {
-            const auto yoffset = ((i * ydims.depth + m) * ydims.height + h) * ydims.width + w;
-            for (const auto p : range(0, pool_size)) {
-              for (const auto q : range(0, pool_size)) {
-                const auto xoffset = ((((i * xdims.depth) + c) * xdims.height) + (pool_size * h + p)) * xdims.width + (pool_size * w + q);
-                Y[yoffset] += X[xoffset] * scale;
-              }
+          const auto yoffset = ((i * ydims.depth + m) * ydims.height + h) * ydims.width + w;
+          for (const auto p : range(0, pool_size)) {
+            for (const auto q : range(0, pool_size)) {
+              const auto xoffset = ((((i * xdims.depth) + m) * xdims.height) + (pool_size * h + p)) * xdims.width + (pool_size * w + q);
+              Y[yoffset] += X[xoffset] * scale;
             }
           }
         }
@@ -103,11 +101,11 @@ static void average_pool(const float *X, const shape &xdims, const int pool_size
 
 // Choose the guess with largest score
 static void argmax(const float *X, const shape &xdims, int *Y) {
-  for (const auto i : range(0, xdims.num)) {
+  for (const auto i : range(0, xdims.height)) {
     auto max_idx = 0;
-    auto max     = X[i * xdims.depth];
-    for (const auto j : range(0, xdims.depth)) {
-      const auto elem = X[(i * xdims.depth) + j];
+    auto max     = X[i * xdims.width];
+    for (const auto j : range(0, xdims.width)) {
+      const auto elem = X[(i * xdims.width) + j];
       if (elem > max) {
         max_idx = j;
         max     = elem;
@@ -156,13 +154,13 @@ static void conv_forward_valid(const float *X, const shape &xdims, const float *
 }
 
 void fully_forward(const float *X, const shape &xdims, float *W, const shape &wdims, float *Y, const shape &ydims) {
-  for (const auto i : range(0, xdims.num)) {
-    for (const auto j : range(0, wdims.num)) {
+  for (const auto i : range(0, xdims.height)) {
+    for (const auto j : range(0, wdims.width)) {
       float sum = 0;
-      for (const auto k : range(0, xdims.depth)) {
-        sum += X[i * xdims.depth + k] * W[k * wdims.num + j];
+      for (const auto k : range(0, xdims.width)) {
+        sum += X[i * xdims.width + k] * W[k * wdims.width + j];
       }
-      Y[i * wdims.num + j] = sum;
+      Y[i * wdims.width + j] = sum;
     }
   }
 }
@@ -242,8 +240,6 @@ void forward_operation(float *x, float *conv1, float *conv2, float *fc1, float *
   auto a            = zeros<float>(adims);
   conv_forward_valid(x, xdims, conv1, conv1dims, a, adims);
 
-  //print_array(a, adims);
-
   // relu layer
   relu4(a, adims);
 
@@ -279,7 +275,7 @@ void forward_operation(float *x, float *conv1, float *conv2, float *fc1, float *
   print_dims(ddims2);
 
   // fully connected layer 1: matrix multiplication
-  const shape edims = {ddims.num, fc1dims.depth};
+  const shape edims = {ddims.num, fc1dims.width};
   std::cout << "edims: ";
   print_dims(edims);
   auto e            = zeros<float>(edims);
@@ -289,10 +285,9 @@ void forward_operation(float *x, float *conv1, float *conv2, float *fc1, float *
   relu2(e, edims);
 
   // fully connected layer 2: matrix multiplication
-  const shape fdims = {edims.num, fc2dims.depth};
+  const shape fdims = {edims.height, fc2dims.width};
   std::cout << "fdims: ";
   print_dims(fdims);
-
   auto f            = zeros<float>(fdims);
   fully_forward(e, edims, fc2, fc2dims, f, fdims);
 
@@ -420,7 +415,6 @@ int main(int argc, char **argv) {
   delete[] dedy;
   delete[] dedw;
   delete[] dedx;
-  // free();
 
   return 0;
 }
